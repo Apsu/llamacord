@@ -35,9 +35,7 @@ class App(discord.Client):
 
 
     @to_thread
-    def ollama(self, message: discord.Message) -> str:
-        id = message.author.id
-
+    def ollama(self, id: int, text: str) -> str:
         data = {
             'stream': False,
             'model': self.config.model,
@@ -50,7 +48,7 @@ class App(discord.Client):
 
         prompt = {
             'role': 'user',
-            'content': message.content
+            'content': text
         }
 
         if id in self.history:
@@ -88,28 +86,30 @@ class App(discord.Client):
         if message.author.bot or not args:
             return
 
-        # Ignore channels not in whitelist, allow DMs
-        if not message.channel.id in self.config.channels and not is_dm:
-            return
-
-        self.logger.info(f'User: {message.author}, Msg: {message.content}')
-
         if is_dm:
             channel = await self.create_dm(message.author)
             reference = None
+            text = message.content.strip()
+        elif message.channel.id in self.config.channels and self.user in message.mentions:
+            if self.user in message.mentions:
+                channel = message.channel
+                reference = message
+                text = "".join(args[1:]).strip()
         else:
-            channel = message.channel
-            reference = message
+            return
 
+        self.logger.info(f'User: {message.author}, Msg: {message.content}')
         command = args[0].lower()
+
         match command:
             case '.reset':
                 if id in self.history:
                     del self.history[id]
-                await channel.send('What were we talking about again?', reference=reference)
+                async with channel.typing():
+                    await channel.send('What were we talking about again?', reference=reference)
             case _:
                 async with channel.typing():
-                    res = await self.ollama(message)
+                    res = await self.ollama(id, text)
                     await channel.send(res, reference=reference)
 
 

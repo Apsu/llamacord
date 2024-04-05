@@ -14,8 +14,8 @@ PyYAML = "^6.0.1"
 [tool.poetry.dev-dependencies]
 python-lsp-server = "^1.11.0"
 
-[tool.poetry.scripts]
-llamacord = "cmd.main:main"
+[project.scripts]
+llamacord = "cmd:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
