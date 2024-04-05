@@ -13,9 +13,8 @@ from functools import wraps, partial
 def to_thread(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        # loop = asyncio.get_event_loop()
         callback = partial(func, *args, **kwargs)
-        return await asyncio.to_thread(callback)  # if using python 3.9+ use `await asyncio.to_thread(callback)`
+        return await asyncio.to_thread(callback)
     return wrapper
 
 
@@ -67,39 +66,70 @@ class App(discord.Client):
             data=json.dumps(data)
         )
 
+        self.logger.info(f'Sending: {data}')
+
         if req.status_code == 200:
             res = json.loads(req.text)
             self.history[id].append(res['message'])
+            # self.logger.info(f'Storing: {self.history[id]}')
             return res['message']['content']
         else:
             return f'Error talking to Ollama: [{req.status_code}] {req.text}'
 
+    def split_response(self, text: str) -> list[str]:
+        # Discord response limit
+        max = 2000
+        res = []
+        lines = text.splitlines()        
+        last = lines.pop(0)
+        for line in lines:
+            if not line.strip():
+                last += '\n'
+                continue
+            
+            cur = '\n'.join([last, line])
+            if len(cur) > max:
+                res.append(last)
+                last = line
+            else:
+                last = cur
+
+        res.append(last)
+        return res
+
 
     async def on_message(self, message: discord.Message) -> None:
         id = message.author.id
-        args = message.content.split()
+        args = [arg.strip() for arg in message.content.split() if arg.strip()]
 
-        # Is in a DM?
         is_dm = isinstance(message.channel, discord.channel.DMChannel)
+        is_mention = self.user in message.mentions
+        is_reply = (message.type == discord.MessageType.reply) and is_mention
+        is_allowed = (message.channel.id in self.config.channels) or is_dm
 
-        # Ignore other bots and empty messages
-        if message.author.bot or not args:
+        # self.logger.info(f'DM: {is_dm}, Mention: {is_mention}, Reply: {is_reply}, Allowed: {is_allowed}')
+
+        # Check for bots, whitelist, and empty messages
+        if message.author.bot or not is_allowed or not args:
             return
 
+        # Check for DMs, mentions, and replies
+        if not is_dm and not is_mention and not is_reply:
+            return
+        
+        # Strip mentions out
+        args = [s for s in args if not any(str(user.id) in s for user in message.mentions)]
+        command = args[0].lower()
+        text = " ".join(args)
+        
         if is_dm:
             channel = await self.create_dm(message.author)
             reference = None
-            text = message.content.strip()
-        elif message.channel.id in self.config.channels and self.user in message.mentions:
-            if self.user in message.mentions:
-                channel = message.channel
-                reference = message
-                text = "".join(args[1:]).strip()
         else:
-            return
+            channel = message.channel
+            reference = message
 
-        self.logger.info(f'User: {message.author}, Msg: {message.content}')
-        command = args[0].lower()
+        self.logger.info(f'User: {message.author}, Cmd: {command}, Msg: {text}')
 
         match command:
             case '.reset':
@@ -110,7 +140,8 @@ class App(discord.Client):
             case _:
                 async with channel.typing():
                     res = await self.ollama(id, text)
-                    await channel.send(res, reference=reference)
+                    for chunk in self.split_response(res):
+                        await channel.send(chunk, reference=reference)
 
 
 def main() -> None:
