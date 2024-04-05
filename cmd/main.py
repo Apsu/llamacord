@@ -25,11 +25,9 @@ class App(discord.Client):
         intents.message_content = True
         super().__init__(intents=intents)
         self.logger = logging.getLogger('discord')
-
+        self.history = {}
         with open('config.yml', 'r') as f:
             self.config = SimpleNamespace(**yaml.safe_load(f))
-
-        self.history = {}
 
 
     async def on_ready(self) -> None:
@@ -38,6 +36,8 @@ class App(discord.Client):
 
     @to_thread
     def ollama(self, message: discord.Message) -> str:
+        id = message.author.id
+
         data = {
             'stream': False,
             'model': self.config.model,
@@ -53,8 +53,6 @@ class App(discord.Client):
             'content': message.content
         }
 
-        id = message.author.id
-
         if id in self.history:
             if len(self.history[id]) > self.config.history:
                 self.history[id].pop(0)
@@ -63,8 +61,6 @@ class App(discord.Client):
             self.history[id] = [prompt]
 
         data['messages'] = self.history[id]
-
-        self.logger.info(f'Sending: {self.history}')
 
         headers = { 'Content-Type': 'application/json' }
         req = requests.post(
@@ -75,9 +71,7 @@ class App(discord.Client):
 
         if req.status_code == 200:
             res = json.loads(req.text)
-            self.logger.info(res)
             self.history[id].append(res['message'])
-            self.logger.info(f'Storing: {self.history}')
             return res['message']['content']
         else:
             return f'Error talking to Ollama: [{req.status_code}] {req.text}'
@@ -100,8 +94,6 @@ class App(discord.Client):
 
         self.logger.info(f'User: {message.author}, Msg: {message.content}')
 
-        command = args[0].lower()
-
         if is_dm:
             channel = await self.create_dm(message.author)
             reference = None
@@ -109,6 +101,7 @@ class App(discord.Client):
             channel = message.channel
             reference = message
 
+        command = args[0].lower()
         match command:
             case '.reset':
                 if id in self.history:
