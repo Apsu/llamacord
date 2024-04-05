@@ -1,0 +1,7 @@
+token:
+channels:
+  - 1225423716293279829
+
+ollama: http://localhost:11434
+model: llama2
+history: 20
