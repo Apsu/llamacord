@@ -66,12 +66,9 @@ class App(discord.Client):
             data=json.dumps(data)
         )
 
-        self.logger.info(f'Sending: {data}')
-
         if req.status_code == 200:
             res = json.loads(req.text)
             self.history[id].append(res['message'])
-            # self.logger.info(f'Storing: {self.history[id]}')
             return res['message']['content']
         else:
             return f'Error talking to Ollama: [{req.status_code}] {req.text}'
@@ -106,8 +103,6 @@ class App(discord.Client):
         is_mention = self.user in message.mentions
         is_reply = (message.type == discord.MessageType.reply) and is_mention
         is_allowed = (message.channel.id in self.config.channels) or is_dm
-
-        # self.logger.info(f'DM: {is_dm}, Mention: {is_mention}, Reply: {is_reply}, Allowed: {is_allowed}')
 
         # Check for bots, whitelist, and empty messages
         if message.author.bot or not is_allowed or not args:
