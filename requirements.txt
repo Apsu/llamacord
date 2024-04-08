@@ -1,0 +1,4 @@
+discord
+ollama
+python-dotenv
+

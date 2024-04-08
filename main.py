@@ -1,9 +1,11 @@
 import discord
 import logging
 import ollama
-import yaml
+import os
 
-from types import SimpleNamespace
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class History():
@@ -26,22 +28,29 @@ class History():
         if id in self.history:
             del self.history[id]
 
+class Config():
+    def __init__(self) -> None:
+        self.token = os.getenv('DISCORD_TOKEN')
+        self.channels = os.getenv('DISCORD_CHANNELS', []).split(',')
+        self.url = os.getenv('OLLAMA_URL', 'http://localhost:11434')
+        self.model = os.getenv('OLLAMA_MODEL', 'llama2')
+        self.history = int(os.getenv('OLLAMA_HISTORY', 20))
+        self.system = os.getenv('OLLAMA_SYSTEM', 'You are a helpful assistant')
 
 class App(discord.Client):
     def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
         super().__init__(intents=intents)
-
-        with open('config.yml', 'r') as f:
-            self.config = SimpleNamespace(**yaml.safe_load(f))
-
+        self.config = Config()
         self.logger = logging.getLogger('discord')
         self.ol = ollama.AsyncClient(self.config.url)
         self.history = History(self.config.history)
+        self.run(token=self.config.token)
 
 
     async def on_ready(self) -> None:
+        self.logger.info(self.config.channels)
         self.logger.info(f'Logged in as {self.user}')
         self.logger.info(f'Initializing LlamaCord model from {self.config.model}...')
         try:
@@ -103,7 +112,7 @@ class App(discord.Client):
         is_mention = self.user.mentioned_in(message)
         is_reply = (message.type == discord.MessageType.reply) and message.reference == self.user
         is_dm = isinstance(message.channel, discord.channel.DMChannel)
-        is_allowed = (message.channel.id in self.config.channels) or is_dm
+        is_allowed = (str(message.channel.id) in self.config.channels) or is_dm
 
         # Check for bots and whitelist
         if message.author.bot or not is_allowed:
@@ -134,8 +143,7 @@ class App(discord.Client):
 
 
 def main() -> None:
-    bot = App()
-    bot.run(bot.config.token)
+    App()
 
 if __name__ == '__main__':
     main()
