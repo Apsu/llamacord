@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "llamacord"
+version = "0.1.0"
+description = ""
+authors = ["Apsu <apsu@propter.net>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+discord = "^2.3.2"
+ollama = "^0.1.8"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.scripts]
+llamacord = "llamacord.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
